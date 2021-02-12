@@ -1,4 +1,3 @@
-import asyncio
 from typing import List, Optional
 
 from .rtp import RtpPacket
@@ -13,21 +12,19 @@ class JitterFrame:
 
 
 class JitterBuffer:
-    def __init__(self, capacity: int, prefetch: int = 0, sendPLI=None) -> None:
+    def __init__(self, capacity: int, prefetch: int = 0) -> None:
         assert capacity & (capacity - 1) == 0, "capacity must be a power of 2"
         self._capacity = capacity
         self._origin: Optional[int] = None
         self._packets: List[Optional[RtpPacket]] = [None for i in range(capacity)]
         self._prefetch = prefetch
         self.__max_number = 65536
-        self.sendPLI = sendPLI
 
     @property
     def capacity(self) -> int:
         return self._capacity
 
     def add(self, packet: RtpPacket) -> Optional[JitterFrame]:
-        # print("[INFO][JitterBuffer] Received Seq:", packet.sequence_number)
         if self._origin is None:
             self._origin = packet.sequence_number
             delta = 0
@@ -38,27 +35,17 @@ class JitterBuffer:
 
         if misorder < delta:
             if misorder >= MAX_MISORDER:
-                # print("[INFO][JitterBuffer] Received Seq1:", packet.sequence_number, " Origin:", self._origin,
-                #       ' misorder:', self.__max_number)
                 self.smart_remove(self.capacity, dumb_mode=True)
                 self._origin = packet.sequence_number
                 delta = misorder = 0
-                if self.sendPLI is not None:
-                    asyncio.ensure_future(self.sendPLI(packet.ssrc))
             else:
                 return None
-
-        # print("[INFO][JitterBuffer] Received Seq2:", packet.sequence_number, " Origin:", self._origin,
-        #       ' delta:', delta)
 
         if delta >= self.capacity:
             # remove just enough frames to fit the received packets
             excess = delta - self.capacity + 1
-            print("[WARNING][JitterBuffer] At least:", excess, "packets will be lost")
             if self.smart_remove(excess):
                 self._origin = packet.sequence_number
-            if self.sendPLI is not None:
-                asyncio.ensure_future(self.sendPLI(packet.ssrc))
 
         pos = packet.sequence_number % self._capacity
         self._packets[pos] = packet
@@ -90,8 +77,7 @@ class JitterBuffer:
                 # check we have prefetched enough
                 frames += 1
                 if frames >= self._prefetch:
-                    self.remove(remove)
-                    # self.smart_remove(remove, dumb_mode=True) # "remove" might still be a bit faster
+                    self.remove(remove)  # this might be a bit faster than smart_remove
                     return frame
 
                 # start a new frame
@@ -126,6 +112,5 @@ class JitterBuffer:
             self._packets[pos] = None
             self._origin = (self._origin + 1) % self.__max_number
             if i == self._capacity - 1:
-                print("[Warning][JitterBuffer] JitterBuffer purged !!!")
                 return True
         return False

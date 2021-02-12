@@ -4,13 +4,6 @@ from aiortc.jitterbuffer import JitterBuffer
 from aiortc.rtp import RtpPacket
 
 
-async def send_rtcp_pli(media_ssrc: int) -> None:
-    """
-    Send an RTCP packet to report picture loss.
-    """
-    print("[INFO][JitterBuffer] PLI sent to media_ssrc:", media_ssrc)
-
-
 class JitterBufferTest(TestCase):
     def assertPackets(self, jbuffer, expected):
         found = [x.sequence_number if x else None for x in jbuffer._packets]
@@ -67,7 +60,7 @@ class JitterBufferTest(TestCase):
         self.assertEqual(jbuffer._origin, 1)
 
     def test_add_seq_too_low_drop(self):
-        jbuffer = JitterBuffer(capacity=4, sendPLI=send_rtcp_pli)
+        jbuffer = JitterBuffer(capacity=4)
 
         frame = jbuffer.add(RtpPacket(sequence_number=2, timestamp=1234))
         self.assertIsNone(frame)
@@ -80,7 +73,7 @@ class JitterBufferTest(TestCase):
         self.assertEqual(jbuffer._origin, 2)
 
     def test_add_seq_too_low_reset(self):
-        jbuffer = JitterBuffer(capacity=4, sendPLI=send_rtcp_pli)
+        jbuffer = JitterBuffer(capacity=4)
 
         frame = jbuffer.add(RtpPacket(sequence_number=2000, timestamp=1234))
         self.assertIsNone(frame)
@@ -113,7 +106,7 @@ class JitterBufferTest(TestCase):
         self.assertPackets(jbuffer, [4, None, None, None])
 
     def test_add_seq_too_high_discard_one_v2(self):
-        jbuffer = JitterBuffer(capacity=4, sendPLI=send_rtcp_pli)
+        jbuffer = JitterBuffer(capacity=4)
 
         jbuffer.add(RtpPacket(sequence_number=0, timestamp=1234))
         self.assertEqual(jbuffer._origin, 0)
